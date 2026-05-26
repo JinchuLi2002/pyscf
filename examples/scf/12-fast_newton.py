@@ -9,7 +9,26 @@ configures. It can perform 3 times faster than the default second order SCF
 settings in many systems.
 '''
 
+import os
+
 from pyscf import gto, scf
+
+
+def maybe_to_gpu(mf, label):
+    if os.environ.get('PYSCF_EXAMPLE_USE_GPU') != '1':
+        return mf
+    to_gpu = getattr(mf, 'to_gpu', None)
+    if not callable(to_gpu):
+        print('%s: GPU4PySCF unavailable for %s' % (label, mf.__class__.__name__))
+        return mf
+    try:
+        gpu_mf = to_gpu()
+    except Exception as err:
+        print('%s: GPU4PySCF conversion failed: %s' % (label, err))
+        return mf
+    print('%s: using GPU4PySCF' % label)
+    return gpu_mf
+
 
 mol = gto.M(atom='''
 N 5.254640 8.787990 1.967400
@@ -63,7 +82,7 @@ H 9.239940 8.492427 3.423290
             verbose = 4,
             output = 'cu3.out')
 
-mf = scf.fast_newton(scf.RHF(mol))
+mf = scf.fast_newton(maybe_to_gpu(scf.RHF(mol), 'fast_newton RHF'))
 print('E(tot) %.15g  ref = -5668.38221757799' % mf.e_tot)
 
 #
@@ -72,7 +91,7 @@ print('E(tot) %.15g  ref = -5668.38221757799' % mf.e_tot)
 # We first create an initial guess with DIIS iterations. The DIIS results are
 # saved in a checkpoint file which can be load in another calculation.
 #
-mf = scf.RHF(mol)
+mf = maybe_to_gpu(scf.RHF(mol), 'DIIS RHF initial guess')
 mf.chkfile = 'cu3-diis.chk'
 mf.max_cycle = 2
 mf.kernel()
@@ -83,4 +102,5 @@ mf.kernel()
 #
 mf = scf.RHF(mol)
 mf.__dict__.update(scf.chkfile.load('cu3-diis.chk', 'scf'))
+mf = maybe_to_gpu(mf, 'fast_newton RHF from checkpoint')
 scf.fast_newton(mf)

@@ -9,8 +9,26 @@ can be used in all electron calculations. They are more efficient than the
 default SCF JK builder.
 '''
 
+import os
 import numpy
 from pyscf.pbc import gto, scf, dft
+
+
+def maybe_to_gpu(mf, label):
+    if os.environ.get('PYSCF_EXAMPLE_USE_GPU') != '1':
+        return mf
+    to_gpu = getattr(mf, 'to_gpu', None)
+    if not callable(to_gpu):
+        print('%s: GPU4PySCF unavailable for %s' % (label, mf.__class__.__name__))
+        return mf
+    try:
+        gpu_mf = to_gpu()
+    except Exception as err:
+        print('%s: GPU4PySCF conversion failed: %s' % (label, err))
+        return mf
+    print('%s: using GPU4PySCF' % label)
+    return gpu_mf
+
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -38,6 +56,7 @@ kmf = scf.KRHF(cell, kpts).mix_density_fit()
 # generated based on the AO basis. It is often not necessary to use dense grid
 # for MDF method.
 kmf.with_df.mesh = [11,11,11]
+kmf = maybe_to_gpu(kmf, 'mixed-density-fit KRHF 4x4x4')
 kmf.kernel()
 
 #
@@ -45,6 +64,7 @@ kmf.kernel()
 #
 kmf = dft.KRKS(cell, kpts).density_fit(auxbasis='weigend')
 kmf.xc = 'bp86'
+kmf = maybe_to_gpu(kmf, 'density-fit KRKS bp86 4x4x4')
 kmf.kernel()
 
 #
@@ -56,12 +76,14 @@ kmf.kernel()
 #
 kmf = dft.KRKS(cell, kpts).rs_density_fit(auxbasis='weigend')
 kmf.xc = 'bp86'
+kmf = maybe_to_gpu(kmf, 'rs-density-fit KRKS bp86 4x4x4')
 kmf.kernel()
 
 #
 # RS-JK builder is efficient for large number of k-points
 #
 kmf = scf.KRHF(cell, kpts).jk_method('RS')
+kmf = maybe_to_gpu(kmf, 'RS-JK KRHF 4x4x4')
 kmf.kernel()
 
 #
@@ -71,4 +93,5 @@ kmf.kernel()
 #
 mf = scf.KRHF(cell, kpts).density_fit()
 mf = mf.newton()
+mf = maybe_to_gpu(mf, 'density-fit Newton KRHF 4x4x4')
 mf.kernel()
