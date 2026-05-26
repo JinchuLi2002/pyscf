@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-import os
-
 import pyscf
 from pyscf.tools.mo_mapping import mo_comps
 from benchmarking_utils import setup_logger, get_cpu_timings
@@ -8,18 +6,14 @@ from benchmarking_utils import setup_logger, get_cpu_timings
 log = setup_logger()
 
 
-def maybe_to_gpu(mf, label):
-    if os.environ.get('PYSCF_EXAMPLE_USE_GPU') != '1':
-        return mf
+def require_gpu(mf, label):
     to_gpu = getattr(mf, 'to_gpu', None)
     if not callable(to_gpu):
-        print('%s: GPU4PySCF unavailable for %s' % (label, mf.__class__.__name__))
-        return mf
-    try:
-        gpu_mf = to_gpu()
-    except Exception as err:
-        print('%s: GPU4PySCF conversion failed: %s' % (label, err))
-        return mf
+        raise RuntimeError(
+            '%s: GPU4PySCF is required, but %s has no to_gpu() method'
+            % (label, mf.__class__.__name__)
+        )
+    gpu_mf = to_gpu()
     print('%s: using GPU4PySCF' % label)
     return gpu_mf
 
@@ -42,7 +36,7 @@ h   0.000000000000000 -2.509154418614532  0.000000000000000
                   basis = bas)
     cpu0 = get_cpu_timings()
 
-    mf = maybe_to_gpu(mol.RHF(), 'C6H6 %s RHF' % bas).run()
+    mf = require_gpu(mol.RHF(), 'C6H6 %s RHF' % bas).run()
     cpu0 = log.timer('C6H6 %s RHF'%bas, *cpu0)
 
     mymp2 = mf.MP2().run()
@@ -57,9 +51,9 @@ h   0.000000000000000 -2.509154418614532  0.000000000000000
     mycc = mf.CCSD().run()
     cpu0 = log.timer('C6H6 %s CCSD'%bas, *cpu0)
 
-    mf = maybe_to_gpu(mol.RKS(), 'C6H6 %s B3LYP' % bas).run(xc='b3lyp')
+    mf = require_gpu(mol.RKS(), 'C6H6 %s B3LYP' % bas).run(xc='b3lyp')
     cpu0 = log.timer('C6H6 %s B3LYP'%bas, *cpu0)
 
-    mf = maybe_to_gpu(mf.density_fit(), 'C6H6 %s density-fit RKS' % bas).run()
+    mf = require_gpu(mf.density_fit(), 'C6H6 %s density-fit RKS' % bas).run()
     cpu0 = log.timer('C6H6 %s density-fit RHF'%bas, *cpu0)
 
